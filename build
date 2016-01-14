@@ -1,0 +1,2 @@
+g++ -Wall -g -O2 cfd_advection.cpp -fopenmp -lm -lGL -lglut -I /group/dpa/include -L/group/dpa/lib -lOpenImageIO -o cfd_advection
+
