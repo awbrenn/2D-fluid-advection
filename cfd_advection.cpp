@@ -78,6 +78,145 @@ float source_brush[BRUSH_SIZE][BRUSH_SIZE];
 
 int xmouse_prev, ymouse_prev;
 
+// dealing with negative results
+int mod(int a, int b)
+{
+  return (a%b+b)%b;
+}
+
+void swapFloatPointers(float** a, float** b)
+{
+  float* temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
+class cfd
+{
+
+  public:
+    // constructors/destructors
+    cfd(int nx, int ny, float dx);
+    ~cfd();
+
+    // public methods
+    float bilinearlyInterpolate(float x, float y);
+    void advect(const float dt);
+
+    // getters
+    int getNx()           const { return Nx; }
+    int getNy()           const { return Ny; }
+    float getDx()         const { return Dx; }
+    float* getDensity1()  { return density1; }
+    float* getDensity2()  { return density2; }
+    float* getVelocity1() { return velocity1; }
+    float* getVelocity2() { return velocity2; }
+    float* getColor1()    { return color1; }
+    float* getColor2()    { return color2; }
+
+    // indexing
+    int dIndex(int i, int j)        const { return i+Nx*j; }
+    int vIndex(int i, int j, int c) const { return (i+Nx*j)*2+c; }
+    int cIndex(int i, int j, int c) const { return (i+Nx*j)*3+c; }
+
+  private:
+    int     Nx, Ny;
+    float   Dx;
+    float   *density1;
+    float   *density2;
+    float   *velocity1;
+    float   *velocity2;
+    float   *color1;
+    float   *color2;
+};
+
+
+cfd::cfd(const int nx, const int ny, const float dx)
+{
+  Nx = nx;
+  Ny = ny;
+  Dx = dx;
+  density1 = new float[Nx*Ny];
+  density2 = new float[Nx*Ny];
+  velocity1 = new float[Nx*Ny*2];
+  velocity2 = new float[Nx*Ny*2];
+  color1 = new float[Nx*Ny*3];
+  color2 = new float[Nx*Ny*3];
+}
+
+
+cfd::~cfd()
+{
+  delete density1;
+  delete density2;
+  delete velocity1;
+  delete velocity2;
+  delete color1;
+  delete color2;
+}
+
+
+float cfd::bilinearlyInterpolate(float x, float y)
+{
+  const int i = mod((int) (x/Dx), Nx);
+  const int j = mod((int) (y/Dx), Ny);
+  const float ax = x/Dx - i;
+  const float ay = y/Dx - j;
+  const float w1 = (1-ax) * (1-ay);
+  const float w2 = ax * (1-ay);
+  const float w3 = (1-ax) * ay;
+  const float w4 = ax * ay;
+
+  density2[dIndex(i,j)]    = density1[dIndex(i,j)]                           * w1 +
+                             density1[dIndex((i + 1) % Nx, j)]               * w2 +
+                             density1[dIndex(i, (j + 1) % Ny)]               * w3 +
+                             density1[dIndex((i + 1) % Nx, (j + 1) % Ny)]    * w4;
+  velocity2[vIndex(i,j,0)] = velocity1[vIndex(i,j,0)]                        * w1 +
+                             velocity1[vIndex((i + 1) % Nx, j,0)]            * w2 +
+                             velocity1[vIndex(i, (j + 1) % Ny,0)]            * w3 +
+                             velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,0)] * w4;
+  velocity2[vIndex(i,j,1)] = velocity1[vIndex(i,j,1)]                        * w1 +
+                             velocity1[vIndex((i + 1) % Nx, j,1)]            * w2 +
+                             velocity1[vIndex(i, (j + 1) % Ny,1)]            * w3 +
+                             velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,1)] * w4;
+  color2[cIndex(i,j,0)]    = color1[cIndex(i,j,0)]                           * w1 +
+                             color1[cIndex((i + 1) % Nx, j,0)]               * w2 +
+                             color1[cIndex(i, (j + 1) % Ny,0)]               * w3 +
+                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,0)]    * w4;
+  color2[cIndex(i,j,1)]    = color1[cIndex(i,j,1)]                           * w1 +
+                             color1[cIndex((i + 1) % Nx, j,1)]               * w2 +
+                             color1[cIndex(i, (j + 1) % Ny,1)]               * w3 +
+                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,1)]    * w4;
+  color2[cIndex(i,j,2)]    = color1[cIndex(i,j,2)]                           * w1 +
+                             color1[cIndex((i + 1) % Nx, j,2)]               * w2 +
+                             color1[cIndex(i, (j + 1) % Ny,2)]               * w3 +
+                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,2)]    * w4;
+  }
+
+
+void cfd::advect(const float dt)
+{
+  float x, y;
+  const float dx = getDx();
+  const int nx = getNx();
+  const int ny = getNy();
+
+  for (int j=0; j<ny; ++j)
+  {
+    for (int i=0; i<nx; ++i)
+    {
+      x = i*dx - velocity1[vIndex(i,j,0)]*dt;
+      y = j*dx - velocity1[vIndex(i,j,1)]*dt;
+      bilinearlyInterpolate(x,y);
+    }
+  }
+
+  swapFloatPointers(&density1, &density2);
+  swapFloatPointers(&velocity1, &velocity2);
+  swapFloatPointers(&color1, &color2);
+}
+
+
 
 ////////  OpenImageIO reader
 
@@ -92,6 +231,7 @@ void readOIIOImage( const char* fname, float* img  )
   yres = spec.height;
   channels = spec.nchannels;
   float* pixels = new float[xres*yres*channels];
+
   in->read_image (TypeDesc::FLOAT, pixels);
   long index = 0;
   for( int j=0;j<yres;j++)
@@ -129,14 +269,14 @@ void InitializeBrushes()
   for( int j=-brush_width;j<=brush_width;j++ )
   {
     int jj = j + brush_width;
-    float jfactor =  (float(brush_width) - fabs(j) )/float(brush_width);
+    float jfactor =  (float(brush_width) - (float)fabs(j) )/float(brush_width);
     for( int i=-brush_width;i<=brush_width;i++ )
     {
       int ii = i + brush_width;
-      float ifactor =  (float(brush_width) - fabs(i) )/float(brush_width);
-      float radius = (jfactor*jfactor + ifactor*ifactor)/2.0;
+      float ifactor =  (float(brush_width) - (float)fabs(i) )/float(brush_width);
+      float radius = (float) ((jfactor * jfactor + ifactor * ifactor) / 2.0);
       source_brush[ii][jj] = pow(radius,0.5);
-      obstruction_brush[ii][jj] = 1.0 - pow(radius, 1.0/4.0);
+      obstruction_brush[ii][jj] = (float)(1.0 - pow(radius, 1.0/4.0));
     }
   }
 }
@@ -223,12 +363,8 @@ void DabSomePaint( int x, int y )
     }
   }
 
-
-  return; 
+  return;
 }
-
-
-
 
 
 //----------------------------------------------------
@@ -304,6 +440,7 @@ void cbMouseMove( int x, int y )
   DabSomePaint( x, y ); 
 }
 
+
 void PrintUsage()
 {
   cout << "cfd_paint keyboard choices\n";
@@ -318,10 +455,10 @@ void PrintUsage()
 
 int main(int argc, char** argv)
 {
-  CmdLineFind clf( argc, argv );
+  CmdLineFind clf(argc, argv);
 
-  iwidth = clf.find("-NX", 512, "Horizontal grid points" );
-  iheight = clf.find("-NY", iwidth, "Vertical grid points" );
+  iwidth = clf.find("-NX", 512, "Horizontal grid points");
+  iheight = clf.find("-NY", iwidth, "Vertical grid points");
 
   setNbCores(4);
 
@@ -332,18 +469,17 @@ int main(int argc, char** argv)
   PrintUsage();
 
   // initialize a few variables
-  size = iwidth*iheight;
+  size = iwidth * iheight;
   scaling_factor = 1;
   toggle_animation_on_off = true;
 
-  display_map = new float[3*size];
-  Initialize(display_map, 3*size, 0.0 );
-  baseimage = new float[3*size];
-  Initialize(baseimage, 3*size, 0.0 );
+  display_map = new float[3 * size];
+  Initialize(display_map, 3 * size, 0.0);
+  baseimage = new float[3 * size];
+  Initialize(baseimage, 3 * size, 0.0);
 
-  if( imagename != "" )
-  {
-    readOIIOImage( imagename.c_str(), baseimage );
+  if (imagename != "") {
+    readOIIOImage(imagename.c_str(), baseimage);
   }
 
 
@@ -355,21 +491,20 @@ int main(int argc, char** argv)
   glutInit(&argc, argv);
 
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-  glutInitWindowSize( iwidth, iheight );
+  glutInitWindowSize(iwidth, iheight);
 
   // Open a window 
   char title[] = "cfd Demo";
-  glutCreateWindow( title );
+  glutCreateWindow(title);
 
-  glClearColor( 1,1,1,1 );
+  glClearColor(1, 1, 1, 1);
 
   glutDisplayFunc(&cbDisplay);
   glutIdleFunc(&cbIdle);
   glutKeyboardFunc(&cbOnKeyboard);
-  glutMouseFunc( &cbMouseDown );
-  glutMotionFunc( &cbMouseMove );
+  glutMouseFunc(&cbMouseDown);
+  glutMotionFunc(&cbMouseMove);
 
   glutMainLoop();
   return 1;
-
-};
+}
