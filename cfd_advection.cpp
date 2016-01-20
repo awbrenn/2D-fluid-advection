@@ -100,7 +100,7 @@ class cfd
     ~cfd();
 
     // public methods
-    float bilinearlyInterpolate(float x, float y);
+    void bilinearlyInterpolate(float x, float y);
     void advect(const float dt);
 
     // getters
@@ -136,12 +136,12 @@ cfd::cfd(const int nx, const int ny, const float dx)
   Nx = nx;
   Ny = ny;
   Dx = dx;
-  density1 = new float[Nx*Ny];
-  density2 = new float[Nx*Ny];
-  velocity1 = new float[Nx*Ny*2];
-  velocity2 = new float[Nx*Ny*2];
-  color1 = new float[Nx*Ny*3];
-  color2 = new float[Nx*Ny*3];
+  density1 = new float[Nx*Ny]();
+  density2 = new float[Nx*Ny]();
+  velocity1 = new float[Nx*Ny*2]();
+  velocity2 = new float[Nx*Ny*2]();
+  color1 = new float[Nx*Ny*3]();
+  color2 = new float[Nx*Ny*3]();
 }
 
 
@@ -156,12 +156,15 @@ cfd::~cfd()
 }
 
 
-float cfd::bilinearlyInterpolate(float x, float y)
+void cfd::bilinearlyInterpolate(float x, float y)
 {
+  // get index if sample
   const int i = mod((int) (x/Dx), Nx);
   const int j = mod((int) (y/Dx), Ny);
-  const float ax = x/Dx - i;
-  const float ay = y/Dx - j;
+
+  // get weights of samples
+  const float ax = abs(x/Dx - ((int)(x/Dx)));
+  const float ay = abs(y/Dx - ((int)(y/Dx)));
   const float w1 = (1-ax) * (1-ay);
   const float w2 = ax * (1-ay);
   const float w3 = (1-ax) * ay;
@@ -197,16 +200,13 @@ float cfd::bilinearlyInterpolate(float x, float y)
 void cfd::advect(const float dt)
 {
   float x, y;
-  const float dx = getDx();
-  const int nx = getNx();
-  const int ny = getNy();
 
-  for (int j=0; j<ny; ++j)
+  for (int j=0; j<Ny; ++j)
   {
-    for (int i=0; i<nx; ++i)
+    for (int i=0; i<Nx; ++i)
     {
-      x = i*dx - velocity1[vIndex(i,j,0)]*dt;
-      y = j*dx - velocity1[vIndex(i,j,1)]*dt;
+      x = i*Dx - velocity1[vIndex(i,j,0)]*dt;
+      y = j*Dx - velocity1[vIndex(i,j,1)]*dt;
       bilinearlyInterpolate(x,y);
     }
   }
