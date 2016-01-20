@@ -51,6 +51,7 @@
 #include <GL/gl.h>   // OpenGL itself.
 #include <GL/glu.h>  // GLU support library.
 #include <GL/glut.h> // GLUT support library.
+#include "cfd.h"
 
 #include <iostream>
 #include <OpenImageIO/imageio.h>
@@ -63,7 +64,8 @@ OIIO_NAMESPACE_USING
 
 int iwidth, iheight, size;
 float *display_map;
-float *baseimage;
+float *density_source;
+cfd *fluid;
 
 int paint_mode;
 enum{ PAINT_OBSTRUCTION, PAINT_SOURCE, PAINT_DIVERGENCE, PAINT_COLOR };
@@ -77,146 +79,6 @@ float obstruction_brush[BRUSH_SIZE][BRUSH_SIZE];
 float source_brush[BRUSH_SIZE][BRUSH_SIZE];
 
 int xmouse_prev, ymouse_prev;
-
-// dealing with negative results
-int mod(int a, int b)
-{
-  return (a%b+b)%b;
-}
-
-void swapFloatPointers(float** a, float** b)
-{
-  float* temp = *a;
-  *a = *b;
-  *b = temp;
-}
-
-class cfd
-{
-
-  public:
-    // constructors/destructors
-    cfd(int nx, int ny, float dx);
-    ~cfd();
-
-    // public methods
-    void bilinearlyInterpolate(float x, float y);
-    void advect(const float dt);
-
-    // getters
-    int getNx()           const { return Nx; }
-    int getNy()           const { return Ny; }
-    float getDx()         const { return Dx; }
-    float* getDensity1()  { return density1; }
-    float* getDensity2()  { return density2; }
-    float* getVelocity1() { return velocity1; }
-    float* getVelocity2() { return velocity2; }
-    float* getColor1()    { return color1; }
-    float* getColor2()    { return color2; }
-
-    // indexing
-    int dIndex(int i, int j)        const { return i+Nx*j; }
-    int vIndex(int i, int j, int c) const { return (i+Nx*j)*2+c; }
-    int cIndex(int i, int j, int c) const { return (i+Nx*j)*3+c; }
-
-  private:
-    int     Nx, Ny;
-    float   Dx;
-    float   *density1;
-    float   *density2;
-    float   *velocity1;
-    float   *velocity2;
-    float   *color1;
-    float   *color2;
-};
-
-
-cfd::cfd(const int nx, const int ny, const float dx)
-{
-  Nx = nx;
-  Ny = ny;
-  Dx = dx;
-  density1 = new float[Nx*Ny]();
-  density2 = new float[Nx*Ny]();
-  velocity1 = new float[Nx*Ny*2]();
-  velocity2 = new float[Nx*Ny*2]();
-  color1 = new float[Nx*Ny*3]();
-  color2 = new float[Nx*Ny*3]();
-}
-
-
-cfd::~cfd()
-{
-  delete density1;
-  delete density2;
-  delete velocity1;
-  delete velocity2;
-  delete color1;
-  delete color2;
-}
-
-
-void cfd::bilinearlyInterpolate(float x, float y)
-{
-  // get index if sample
-  const int i = mod((int) (x/Dx), Nx);
-  const int j = mod((int) (y/Dx), Ny);
-
-  // get weights of samples
-  const float ax = abs(x/Dx - ((int)(x/Dx)));
-  const float ay = abs(y/Dx - ((int)(y/Dx)));
-  const float w1 = (1-ax) * (1-ay);
-  const float w2 = ax * (1-ay);
-  const float w3 = (1-ax) * ay;
-  const float w4 = ax * ay;
-
-  density2[dIndex(i,j)]    = density1[dIndex(i,j)]                           * w1 +
-                             density1[dIndex((i + 1) % Nx, j)]               * w2 +
-                             density1[dIndex(i, (j + 1) % Ny)]               * w3 +
-                             density1[dIndex((i + 1) % Nx, (j + 1) % Ny)]    * w4;
-  velocity2[vIndex(i,j,0)] = velocity1[vIndex(i,j,0)]                        * w1 +
-                             velocity1[vIndex((i + 1) % Nx, j,0)]            * w2 +
-                             velocity1[vIndex(i, (j + 1) % Ny,0)]            * w3 +
-                             velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,0)] * w4;
-  velocity2[vIndex(i,j,1)] = velocity1[vIndex(i,j,1)]                        * w1 +
-                             velocity1[vIndex((i + 1) % Nx, j,1)]            * w2 +
-                             velocity1[vIndex(i, (j + 1) % Ny,1)]            * w3 +
-                             velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,1)] * w4;
-  color2[cIndex(i,j,0)]    = color1[cIndex(i,j,0)]                           * w1 +
-                             color1[cIndex((i + 1) % Nx, j,0)]               * w2 +
-                             color1[cIndex(i, (j + 1) % Ny,0)]               * w3 +
-                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,0)]    * w4;
-  color2[cIndex(i,j,1)]    = color1[cIndex(i,j,1)]                           * w1 +
-                             color1[cIndex((i + 1) % Nx, j,1)]               * w2 +
-                             color1[cIndex(i, (j + 1) % Ny,1)]               * w3 +
-                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,1)]    * w4;
-  color2[cIndex(i,j,2)]    = color1[cIndex(i,j,2)]                           * w1 +
-                             color1[cIndex((i + 1) % Nx, j,2)]               * w2 +
-                             color1[cIndex(i, (j + 1) % Ny,2)]               * w3 +
-                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,2)]    * w4;
-  }
-
-
-void cfd::advect(const float dt)
-{
-  float x, y;
-
-  for (int j=0; j<Ny; ++j)
-  {
-    for (int i=0; i<Nx; ++i)
-    {
-      x = i*Dx - velocity1[vIndex(i,j,0)]*dt;
-      y = j*Dx - velocity1[vIndex(i,j,1)]*dt;
-      bilinearlyInterpolate(x,y);
-    }
-  }
-
-  swapFloatPointers(&density1, &density2);
-  swapFloatPointers(&velocity1, &velocity2);
-  swapFloatPointers(&color1, &color2);
-}
-
-
 
 ////////  OpenImageIO reader
 
@@ -292,6 +154,7 @@ void setNbCores( int nb )
 
 void ConvertToDisplay()
 {
+  float *color = fluid->getColor1();
   for( int j=0;j<iheight;j++ )
   {
 #pragma omp parallel for
@@ -299,9 +162,9 @@ void ConvertToDisplay()
     {
       int index = i + iwidth*j;
       float r,g,b;
-      r = baseimage[index*3];
-      g = baseimage[index*3+1];
-      b = baseimage[index*3+2];
+      r = color[index*3];
+      g = color[index*3+1];
+      b = color[index*3+2];
       display_map[3*index  ] = r * scaling_factor;
       display_map[3*index+1] = g * scaling_factor;
       display_map[3*index+2] = b * scaling_factor;
@@ -325,6 +188,8 @@ void resetScaleFactor( float amount )
 void DabSomePaint( int x, int y )
 {
   int brush_width = (BRUSH_SIZE-1)/2;
+  float* color = fluid->getColor1();
+  float* density = fluid->getDensity1();
   int xstart = x - brush_width;
   int ystart = y - brush_width;
   if( xstart < 0 ){ xstart = 0; }
@@ -335,7 +200,6 @@ void DabSomePaint( int x, int y )
   if( xend >= iwidth ){ xend = iwidth-1; }
   if( yend >= iheight ){ yend = iheight-1; }
 
-
   if( paint_mode == PAINT_OBSTRUCTION )
   {
     for(int ix=xstart;ix <= xend; ix++)
@@ -343,9 +207,9 @@ void DabSomePaint( int x, int y )
       for( int iy=ystart;iy<=yend; iy++)
       {
         int index = ix + iwidth*(iheight-iy-1);
-        baseimage[3*index] *= obstruction_brush[ix-xstart][iy-ystart];
-        baseimage[3*index+1] *= obstruction_brush[ix-xstart][iy-ystart];
-        baseimage[3*index+2] *= obstruction_brush[ix-xstart][iy-ystart];
+        color[3*index] *= obstruction_brush[ix-xstart][iy-ystart];
+        color[3*index+1] *= obstruction_brush[ix-xstart][iy-ystart];
+        color[3*index+2] *= obstruction_brush[ix-xstart][iy-ystart];
       }
     }
   }
@@ -356,9 +220,10 @@ void DabSomePaint( int x, int y )
       for( int iy=ystart;iy<=yend; iy++)
       {
         int index = ix + iwidth*(iheight-iy-1);
-        baseimage[3*index] += source_brush[ix-xstart][iy-ystart];
-        baseimage[3*index+1] += source_brush[ix-xstart][iy-ystart];
-        baseimage[3*index+2] += source_brush[ix-xstart][iy-ystart];
+        color[3*index] += source_brush[ix-xstart][iy-ystart];
+        color[3*index+1] += source_brush[ix-xstart][iy-ystart];
+        color[3*index+2] += source_brush[ix-xstart][iy-ystart];
+        density[index] += source_brush[ix-xstart][iy-ystart];
       }
     }
   }
@@ -382,9 +247,21 @@ void cbDisplay( void )
   glutSwapBuffers();
 }
 
+void sources()
+{
+
+}
+
+void update()
+{
+  fluid->advect(1.0);
+  sources();
+}
+
 // animate and display new result
 void cbIdle()
 {
+  update();
   ConvertToDisplay();
   glutPostRedisplay(); 
 }
@@ -475,11 +352,11 @@ int main(int argc, char** argv)
 
   display_map = new float[3 * size];
   Initialize(display_map, 3 * size, 0.0);
-  baseimage = new float[3 * size];
-  Initialize(baseimage, 3 * size, 0.0);
+  density_source = new float[size];
+  fluid = new cfd(iwidth, iheight, 1.0);
 
   if (imagename != "") {
-    readOIIOImage(imagename.c_str(), baseimage);
+    readOIIOImage(imagename.c_str(), fluid->getColor1());
   }
 
 
