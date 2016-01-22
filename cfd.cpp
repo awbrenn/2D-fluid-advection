@@ -5,23 +5,28 @@
 #include "cfd.h"
 #include "cfdUtility.h"
 
+
 // dealing with negative results
 int mod(int a, int b)
 {
   return (a%b+b)%b;
 }
 
+
 cfd::cfd(const int nx, const int ny, const float dx)
 {
   Nx = nx;
   Ny = ny;
   Dx = dx;
+  gravityX = 0.0;
+  gravityY = 9.8;
   density1 = new float[Nx*Ny]();
   density2 = new float[Nx*Ny]();
   velocity1 = new float[Nx*Ny*2]();
   velocity2 = new float[Nx*Ny*2]();
   color1 = new float[Nx*Ny*3]();
   color2 = new float[Nx*Ny*3]();
+  densitySourceField = 0;
 }
 
 
@@ -36,7 +41,7 @@ cfd::~cfd()
 }
 
 
-void cfd::bilinearlyInterpolate(float x, float y)
+void cfd::bilinearlyInterpolate(const float x, const float y)
 {
   // get index if sample
   const int i = mod((int) (x/Dx), Nx);

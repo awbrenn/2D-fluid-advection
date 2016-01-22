@@ -5,6 +5,7 @@
 #ifndef ADVECTION_CFD_H
 #define ADVECTION_CFD_H
 
+
 class cfd
 {
 
@@ -14,13 +15,15 @@ class cfd
     ~cfd();
 
     // public methods
-    void bilinearlyInterpolate(float x, float y);
-    void advect(const float dt);
+    void bilinearlyInterpolate(const float x, const float y);
+    void advect(const float dt = (float)(1.0/24.0));
 
     // getters
     int getNx()           const { return Nx; }
     int getNy()           const { return  Ny; }
     float getDx()         const { return Dx; }
+    float getGravityX()   const { return gravityX;}
+    float getGravityY()   const { return gravityY;}
     float* getDensity1()  const { return density1; }
     float* getDensity2()  const { return density2; }
     float* getVelocity1() const { return velocity1; }
@@ -40,13 +43,11 @@ class cfd
   private:
     int     Nx, Ny;
     float   Dx;
-    float   *density1;
-    float   *density2;
-    float   *velocity1;
-    float   *velocity2;
-    float   *color1;
-    float   *color2;
-    float   *densitySourceField = 0;
+    float   gravityX, gravityY;
+    float   *density1, *density2;
+    float   *velocity1, *velocity2;
+    float   *color1, *color2;
+    float   *densitySourceField;
 };
 
 #endif //ADVECTION_CFD_H

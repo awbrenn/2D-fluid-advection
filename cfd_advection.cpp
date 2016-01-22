@@ -249,12 +249,23 @@ void cbDisplay( void )
 
 void sources()
 {
+  float* velocity = fluid->getVelocity1();
+  float* density = fluid->getDensity1();
+
+  for (int j=0; j<fluid->getNx(); ++j)
+  {
+    for (int i=0; i<fluid->getNy(); ++i)
+    {
+      velocity[fluid->vIndex(i,j,0)] = fluid->getGravityX() * density[fluid->dIndex(i,j)];
+      velocity[fluid->vIndex(i,j,1)] = fluid->getGravityY() * density[fluid->dIndex(i,j)];
+    }
+  }
 
 }
 
 void update()
 {
-  fluid->advect(1.0);
+  fluid->advect();
   sources();
 }
 
@@ -276,7 +287,7 @@ void cbOnKeyboard( unsigned char key, int x, int y )
     break;
 
     case '+': case '=':
-    resetScaleFactor( 1.0/0.9 );
+    resetScaleFactor( (float)(1.0/0.9) );
     break;
 
     case 'r':
