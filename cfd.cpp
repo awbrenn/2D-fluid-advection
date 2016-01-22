@@ -19,7 +19,7 @@ cfd::cfd(const int nx, const int ny, const float dx)
   Ny = ny;
   Dx = dx;
   gravityX = 0.0;
-  gravityY = 9.8;
+  gravityY = -9.8;
   density1 = new float[Nx*Ny]();
   density2 = new float[Nx*Ny]();
   velocity1 = new float[Nx*Ny*2]();
@@ -41,9 +41,9 @@ cfd::~cfd()
 }
 
 
-void cfd::bilinearlyInterpolate(const float x, const float y)
+void cfd::bilinearlyInterpolate(const int ii, const int jj, const float x, const float y)
 {
-  // get index if sample
+  // get index of sample
   const int i = mod((int) (x/Dx), Nx);
   const int j = mod((int) (y/Dx), Ny);
 
@@ -55,30 +55,30 @@ void cfd::bilinearlyInterpolate(const float x, const float y)
   const float w3 = (1-ax) * ay;
   const float w4 = ax * ay;
 
-  density2[dIndex(i,j)]    = density1[dIndex(i,j)]                           * w1 +
-                             density1[dIndex((i + 1) % Nx, j)]               * w2 +
-                             density1[dIndex(i, (j + 1) % Ny)]               * w3 +
-                             density1[dIndex((i + 1) % Nx, (j + 1) % Ny)]    * w4;
-  velocity2[vIndex(i,j,0)] = velocity1[vIndex(i,j,0)]                        * w1 +
-                             velocity1[vIndex((i + 1) % Nx, j,0)]            * w2 +
-                             velocity1[vIndex(i, (j + 1) % Ny,0)]            * w3 +
-                             velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,0)] * w4;
-  velocity2[vIndex(i,j,1)] = velocity1[vIndex(i,j,1)]                        * w1 +
-                             velocity1[vIndex((i + 1) % Nx, j,1)]            * w2 +
-                             velocity1[vIndex(i, (j + 1) % Ny,1)]            * w3 +
-                             velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,1)] * w4;
-  color2[cIndex(i,j,0)]    = color1[cIndex(i,j,0)]                           * w1 +
-                             color1[cIndex((i + 1) % Nx, j,0)]               * w2 +
-                             color1[cIndex(i, (j + 1) % Ny,0)]               * w3 +
-                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,0)]    * w4;
-  color2[cIndex(i,j,1)]    = color1[cIndex(i,j,1)]                           * w1 +
-                             color1[cIndex((i + 1) % Nx, j,1)]               * w2 +
-                             color1[cIndex(i, (j + 1) % Ny,1)]               * w3 +
-                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,1)]    * w4;
-  color2[cIndex(i,j,2)]    = color1[cIndex(i,j,2)]                           * w1 +
-                             color1[cIndex((i + 1) % Nx, j,2)]               * w2 +
-                             color1[cIndex(i, (j + 1) % Ny,2)]               * w3 +
-                             color1[cIndex((i + 1) % Nx, (j + 1) % Ny,2)]    * w4;
+  density2[dIndex(ii,jj)]    = density1[dIndex(i,j)]                           * w1 +
+                               density1[dIndex((i + 1) % Nx, j)]               * w2 +
+                               density1[dIndex(i, (j + 1) % Ny)]               * w3 +
+                               density1[dIndex((i + 1) % Nx, (j + 1) % Ny)]    * w4;
+  velocity2[vIndex(ii,jj,0)] = velocity1[vIndex(i,j,0)]                        * w1 +
+                               velocity1[vIndex((i + 1) % Nx, j,0)]            * w2 +
+                               velocity1[vIndex(i, (j + 1) % Ny,0)]            * w3 +
+                               velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,0)] * w4;
+  velocity2[vIndex(ii,jj,1)] = velocity1[vIndex(i,j,1)]                        * w1 +
+                               velocity1[vIndex((i + 1) % Nx, j,1)]            * w2 +
+                               velocity1[vIndex(i, (j + 1) % Ny,1)]            * w3 +
+                               velocity1[vIndex((i + 1) % Nx, (j + 1) % Ny,1)] * w4;
+  color2[cIndex(ii,jj,0)]    = color1[cIndex(i,j,0)]                           * w1 +
+                               color1[cIndex((i + 1) % Nx, j,0)]               * w2 +
+                               color1[cIndex(i, (j + 1) % Ny,0)]               * w3 +
+                               color1[cIndex((i + 1) % Nx, (j + 1) % Ny,0)]    * w4;
+  color2[cIndex(ii,jj,1)]    = color1[cIndex(i,j,1)]                           * w1 +
+                               color1[cIndex((i + 1) % Nx, j,1)]               * w2 +
+                               color1[cIndex(i, (j + 1) % Ny,1)]               * w3 +
+                               color1[cIndex((i + 1) % Nx, (j + 1) % Ny,1)]    * w4;
+  color2[cIndex(ii,jj,2)]    = color1[cIndex(i,j,2)]                           * w1 +
+                               color1[cIndex((i + 1) % Nx, j,2)]               * w2 +
+                               color1[cIndex(i, (j + 1) % Ny,2)]               * w3 +
+                               color1[cIndex((i + 1) % Nx, (j + 1) % Ny,2)]    * w4;
 }
 
 
@@ -86,17 +86,30 @@ void cfd::advect(const float dt)
 {
   float x, y;
 
+  // advect each grid point
   for (int j=0; j<Ny; ++j)
   {
     for (int i=0; i<Nx; ++i)
     {
       x = i*Dx - velocity1[vIndex(i,j,0)]*dt;
       y = j*Dx - velocity1[vIndex(i,j,1)]*dt;
-      bilinearlyInterpolate(x,y);
+      bilinearlyInterpolate(i, j, x,y);
     }
   }
 
   swapFloatPointers(&density1, &density2);
   swapFloatPointers(&velocity1, &velocity2);
   swapFloatPointers(&color1, &color2);
+}
+
+void cfd::sources()
+{
+  for (int j=0; j<Ny; ++j)
+  {
+    for (int i=0; i<Nx; ++i)
+    {
+      velocity1[vIndex(i,j,0)] = gravityX * density1[dIndex(i,j)];
+      velocity1[vIndex(i,j,1)] = gravityY * density1[dIndex(i,j)];
+    }
+  }
 }

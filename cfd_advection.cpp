@@ -64,7 +64,6 @@ OIIO_NAMESPACE_USING
 
 int iwidth, iheight, size;
 float *display_map;
-float *density_source;
 cfd *fluid;
 
 int paint_mode;
@@ -118,12 +117,6 @@ void readOIIOImage( const char* fname, float* img  )
 //
 //  
 // Initialize all of the fields to zero
-void Initialize( float *data, int size, float value )
-{
-#pragma omp parallel for
-   for(int i=0;i<size;i++ ) { data[i] = value; }
-}
-
 
 void InitializeBrushes()
 {
@@ -239,7 +232,6 @@ void DabSomePaint( int x, int y )
 //----------------------------------------------------
 
 
-
 void cbDisplay( void )
 {
   glClear(GL_COLOR_BUFFER_BIT );
@@ -247,26 +239,11 @@ void cbDisplay( void )
   glutSwapBuffers();
 }
 
-void sources()
-{
-  float* velocity = fluid->getVelocity1();
-  float* density = fluid->getDensity1();
-
-  for (int j=0; j<fluid->getNx(); ++j)
-  {
-    for (int i=0; i<fluid->getNy(); ++i)
-    {
-      velocity[fluid->vIndex(i,j,0)] = fluid->getGravityX() * density[fluid->dIndex(i,j)];
-      velocity[fluid->vIndex(i,j,1)] = fluid->getGravityY() * density[fluid->dIndex(i,j)];
-    }
-  }
-
-}
 
 void update()
 {
   fluid->advect();
-  sources();
+  fluid->sources();
 }
 
 // animate and display new result
@@ -362,8 +339,6 @@ int main(int argc, char** argv)
   toggle_animation_on_off = true;
 
   display_map = new float[3 * size];
-  Initialize(display_map, 3 * size, 0.0);
-  density_source = new float[size];
   fluid = new cfd(iwidth, iheight, 1.0);
 
   if (imagename != "") {

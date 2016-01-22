@@ -15,8 +15,9 @@ class cfd
     ~cfd();
 
     // public methods
-    void bilinearlyInterpolate(const float x, const float y);
+    void bilinearlyInterpolate(const int ii, const int jj, const float x, const float y);
     void advect(const float dt = (float)(1.0/24.0));
+    void sources();
 
     // getters
     int getNx()           const { return Nx; }
